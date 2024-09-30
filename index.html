@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Transparency Processor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    #drop-zone {
+      width: 300px;
+      height: 300px;
+      border: 3px dashed #ccc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #aaa;
+      margin-bottom: 20px;
+    }
+
+    #drop-zone.hover {
+      border-color: #000;
+    }
+
+    #images-container {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: 20px;
+    }
+
+    .image-wrapper {
+      position: relative;
+      width: 48%;
+      border: 2px solid #ccc;
+    }
+
+    .image-wrapper canvas {
+      width: 100%;
+      height: auto;
+    }
+
+    .checkerboard {
+      background-color: #ddd;
+      background-image: linear-gradient(45deg, #999 25%, transparent 25%, transparent 75%, #999 75%, #999),
+        linear-gradient(45deg, #999 25%, transparent 25%, transparent 75%, #999 75%, #999);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+    }
+
+    #background-selector {
+      margin-bottom: 20px;
+    }
+
+    #color-selection {
+      margin-bottom: 20px;
+    }
+
+    #invert-colors-container {
+      margin-bottom: 20px;
+    }
+
+    #download-btn {
+      display: none;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Image Transparency Processor</h1>
+
+  <div id="drop-zone">Drag and drop an image here</div>
+
+  <div id="color-selection">
+    <label>
+      <input type="radio" name="color" value="black" checked> Black
+    </label>
+    <label>
+      <input type="radio" name="color" value="white"> White
+    </label>
+  </div>
+
+  <div id="invert-colors-container">
+    <label>
+      <input id="invert-colors" type="checkbox"> Invert colors in output
+    </label>
+  </div>
+
+  <div id="background-selector">
+    <label>Select background:</label>
+    <select id="background-type">
+      <option value="checkerboard">Checkerboard</option>
+      <option value="purple">Purple</option>
+      <option value="green">Green</option>
+    </select>
+  </div>
+
+  <div id="images-container">
+    <!-- Original Image Canvas -->
+    <div class="image-wrapper" id="original-image-wrapper">
+      <canvas id="original-canvas"></canvas>
+    </div>
+    <!-- Processed Image Canvas -->
+    <div class="image-wrapper checkerboard" id="processed-image-wrapper">
+      <canvas id="processed-canvas"></canvas>
+    </div>
+  </div>
+
+  <button id="download-btn">Download Processed Image</button>
+
+  <script>
+    const dropZone = document.getElementById('drop-zone');
+    const originalCanvas = document.getElementById('original-canvas');
+    const processedCanvas = document.getElementById('processed-canvas');
+    const originalCtx = originalCanvas.getContext('2d');
+    const processedCtx = processedCanvas.getContext('2d');
+    const downloadBtn = document.getElementById('download-btn');
+    const processedImageWrapper = document.getElementById('processed-image-wrapper');
+    const backgroundSelector = document.getElementById('background-type');
+    const colorSelection = document.querySelectorAll('input[name="color"]');
+    const invertColors = document.getElementById('invert-colors');
+
+    let originalImageData = null; // Store original image data
+
+    // Background switcher logic
+    backgroundSelector.addEventListener('change', function () {
+      updateBackgroundAndReprocess();
+    });
+
+    // Function to update the background and reprocess the image
+    function updateBackgroundAndReprocess() {
+      const selectedBackground = backgroundSelector.value;
+
+      // Set background of the processed image container
+      if (selectedBackground === 'checkerboard') {
+        processedImageWrapper.classList.add('checkerboard');
+        processedImageWrapper.style.backgroundColor = '';
+      } else {
+        processedImageWrapper.classList.remove('checkerboard');
+        processedImageWrapper.style.backgroundColor = selectedBackground;
+      }
+
+      // Get selected color (black or white) and reprocess the image
+      const selectedColor = document.querySelector('input[name="color"]:checked').value;
+      reprocessImage(selectedColor);
+    }
+
+    // Function to convert pixel alpha values based on the selected color (black or white)
+    function processImage(imageData, selectedColor) {
+      const data = imageData.data;
+
+      // Loop through every pixel (rgba = 4 elements in the array for each pixel)
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3] / 255; // Convert alpha to range [0, 1]
+
+        // Calculate the "lightness" of the pixel (average of RGB values)
+        const lightness = (r + g + b) / 3 / 255;
+
+
+        
+        // Calculate new alpha value (1 - lightness if black, lightness if white)
+        if (selectedColor === 'black') {
+          data[i + 3] = lightness * 255;  // New alpha.
+          // Set the RGB channels to white or black (invert colors)
+          data[i] = data[i + 1] = data[i + 2] = invertColors.checked ? 0 : 255;
+        } else if (selectedColor === 'white') {
+          data[i + 3] = (1 - lightness) * 255;  // New alpha
+          // Set the RGB channels to white or black (inverte colors)
+          data[i] = data[i + 1] = data[i + 2] = invertColors.checked ? 255 : 0;
+        }
+      }
+
+      return imageData;
+    }
+
+    // Reprocess the image with the selected color
+    function reprocessImage(selectedColor) {
+      if (originalImageData) {
+        const processedData = processImage(new ImageData(new Uint8ClampedArray(originalImageData.data), originalImageData.width, originalImageData.height), selectedColor);
+        processedCtx.putImageData(processedData, 0, 0);
+      }
+    }
+
+    // Handle the file being dropped
+    function handleDrop(event) {
+      event.preventDefault();
+      const files = event.dataTransfer.files;
+
+      if (files.length > 0 && files[0].type.startsWith('image/')) {
+        const file = files[0];
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            originalCanvas.width = processedCanvas.width = img.width;
+            originalCanvas.height = processedCanvas.height = img.height;
+
+            // Draw original image on original canvas
+            originalCtx.drawImage(img, 0, 0);
+
+            // Get the image data from the original canvas
+            originalImageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+
+            // Show the download button
+            downloadBtn.style.display = 'block';
+
+            // Trigger the background update and image reprocessing
+            updateBackgroundAndReprocess();
+          };
+
+          img.src = e.target.result;
+        };
+
+        reader.readAsDataURL(file);
+      }
+    }
+
+    // Download the processed image
+    downloadBtn.addEventListener('click', function () {
+      const link = document.createElement('a');
+      link.download = 'processed-image.png';
+      link.href = processedCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    // Drag & drop functionality
+    dropZone.addEventListener('dragover', function (event) {
+      event.preventDefault();
+      dropZone.classList.add('hover');
+    });
+
+    dropZone.addEventListener('dragleave', function () {
+      dropZone.classList.remove('hover');
+    });
+
+    dropZone.addEventListener('drop', function (event) {
+      dropZone.classList.remove('hover');
+      handleDrop(event);
+    });
+
+    // Reprocess image when the user changes the color selection (black or white)
+    colorSelection.forEach(colorOption => {
+      colorOption.addEventListener('change', updateBackgroundAndReprocess);
+    });
+    // Reprocess image when the user inverts color
+    invertColors.addEventListener('change', updateBackgroundAndReprocess);
+
+  </script>
+
+</body>
+
+</html>
